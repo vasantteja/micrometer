@@ -130,4 +130,26 @@ class CurrentObservationTest {
         assertThat(registry.getCurrentObservationScope()).isNull();
     }
 
+    @Test
+    void newChildObservation_ForDifferentThread() throws ExecutionException, InterruptedException {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Observation parentObservation = Observation.createNotStarted("parent.observation", registry);
+        assertThat(registry.getCurrentObservationScope()).isNull();
+        Runnable runnable = () -> {
+            System.out.println("Inside : " + Thread.currentThread().getName());
+            assertThat(registry.getCurrentObservation()).isEqualTo("child.observation");
+        };
+        executor.submit(() -> {
+            try (Observation.Scope scope = parentObservation.openScope()) {
+                ObservedRunnable observedRunnable = new ObservedRunnable(registry, null, "child.observation", runnable);
+                observedRunnable.run();
+                assertThat(registry.getCurrentObservation()).isSameAs(parentObservation);
+            }
+            parentObservation.stop();
+            assertThat(registry.getCurrentObservation()).isNull();
+
+        }).get();
+        assertThat(registry.getCurrentObservation()).isNull();
+    }
+
 }
